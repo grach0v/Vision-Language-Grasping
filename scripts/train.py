@@ -3,6 +3,7 @@ import numpy as np
 import random
 import datetime
 import torch
+import wandb
 
 import utils
 from env.constants import WORKSPACE_LIMITS
@@ -68,6 +69,11 @@ if __name__ == "__main__":
 
     args = parse_args()
     
+    # Initialize Weights & Biases logging
+    wandb.init(project="vision-language-grasping", config=vars(args))
+    # Watch model components for gradients and parameters
+    # agent is not yet defined here, so we defer watches after instantiation
+
     # set device and seed
     args.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     random.seed(args.seed)
@@ -88,6 +94,10 @@ if __name__ == "__main__":
     graspnet = Graspnet()
     # load vision-language-action model
     agent = ViLG(grasp_dim=7, args=args)
+    # After creating agent, watch its networks
+    wandb.watch(agent.vilg_fusion, log="all", log_freq=100)
+    wandb.watch(agent.policy, log="all", log_freq=100)
+    wandb.watch(agent.critic, log="all", log_freq=100)
     if args.load_model:
         logger.load_checkpoint(agent, args.model_path, args.evaluate)
 
@@ -162,8 +172,19 @@ if __name__ == "__main__":
                     # Update parameters of all the networks
                     critic_1_loss, critic_2_loss, policy_loss, ent_loss, alpha, feature_loss = agent.update_parameters(memory, args.batch_size, updates)
                     updates += 1
+                    # Log training losses to wandb
+                    wandb.log({
+                        "critic1_loss": critic_1_loss,
+                        "critic2_loss": critic_2_loss,
+                        "policy_loss": policy_loss,
+                        "entropy_loss": ent_loss,
+                        "alpha": alpha,
+                        "feature_loss": feature_loss
+                    }, step=updates)
 
             reward, done = env.step(action)
+            # Log reward at each step
+            wandb.log({"step_reward": reward}, step=iteration)
             if episode < 500:
                 if reward > -1 and reward < 0:
                     reward = -1
@@ -222,4 +243,10 @@ if __name__ == "__main__":
         logger.write_to_log('episode_reward', logger.episode_reward_logs)
         logger.write_to_log('episode_step', logger.episode_step_logs)
         logger.write_to_log('episode_success', logger.episode_success_logs)
+        # Log episode metrics to wandb
+        wandb.log({
+            "episode_reward": episode_reward,
+            "episode_steps": episode_steps,
+            "episode_success": float(done)
+        }, step=episode)
         print("\033[034m Episode: {}, total numsteps: {}, episode steps: {}, episode reward: {}, success: {}\033[0m".format(episode, iteration, episode_steps, round(episode_reward, 2), done))
