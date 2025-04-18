@@ -13,9 +13,6 @@ We focus on the task of language-conditioned grasping in clutter, in which a rob
 
 Any question, please let me know: kcxu@zju.edu.cn
 
-## News
-- Our new work [Efficient Alignment of Unconditioned Action Prior for Language-conditioned Pick and Place in Clutter](https://arxiv.org/abs/2503.09423) has been released, check out the [paper](https://arxiv.org/abs/2503.09423) and [code](https://github.com/xukechun/Action-Prior-Alignment).
-
 ## Setup
 ###  Installation
 
@@ -66,27 +63,6 @@ solution: to install torch with the right cuda version, e.g.
 pip install torch==1.7.1+cu110 torchvision==0.8.2+cu110 -f https://download.pytorch.org/whl/torch_stable.html
 ```
 
-### Easy Installation
-
-For the convenience of result reproduction, we provide our conda environment produced by conda-pack in this [link](https://drive.google.com/file/d/18A-wCePI3_yBsbCfRqc_9A0KKMTb86ml/view). NOTE: This environment is compatiable with CUDA 11.1.
-
-Then you can easily build and activate the conda environment by
-
-```
-cd 'PATH OF YOUR CONDA ENVS'
-mkdir vilg
-tar -xzvf vilg.tar.gz -C vilg
-conda activate vilg
-
-python setup.py develop
-
-cd models/graspnet/pointnet2
-python setup.py install
-
-cd ../knn
-python setup.py install
-```
-
 ### Assets
 We provide the processed object models in this [link](https://drive.google.com/drive/folders/1WxKDFXJktoqiP0jmkDZrMCcNNBx5u-YM?usp=drive_link). Please download the file and unzip it in the `assets` folder.
 
@@ -115,6 +91,7 @@ python scripts/test.py --load_model --model_path 'PATH OF YOUR CHECKPOINT FILE'
 |"give me the cup"|"I need a fruit"|
 | <img src="images/c.gif" width="150" height="200" title="c" alt="alt text"/>  | <img src="images/d.gif" width="150" height="200"/> |
 |"get something to drink"|"grasp a round object"|
+
 
 ## Citation
 
