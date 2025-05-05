@@ -85,7 +85,7 @@ if __name__ == "__main__":
     num_episode = args.num_episode
 
     # load environment
-    env = Environment(gui=True)
+    env = Environment(gui=False)
     env.seed(args.seed)
     # env_sim = Environment(gui=False)
     # load logger

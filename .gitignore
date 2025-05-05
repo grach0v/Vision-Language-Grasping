@@ -178,4 +178,8 @@ assets/
 temp.txt
 mask_bboxs.png
 logs/
+*.zip
+vhacd_log.txt
+wandb/
+
 
