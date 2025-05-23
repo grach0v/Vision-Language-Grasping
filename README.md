@@ -30,10 +30,12 @@ conda create -n vilg python=3.8
 conda activate vilg
 
 pip install -r requirements.txt
-
+python -m pip install -U "packaging>=23.2" setuptools wheel
 python setup.py develop
 
 cd models/graspnet/pointnet2
+conda install -c conda-forge cudatoolkit-dev=11.0
+python -m pip install "numpy<1.24"
 python setup.py install
 
 cd ../knn

@@ -9,7 +9,7 @@ import env.cameras as cameras
 from env.constants import PIXEL_SIZE, WORKSPACE_LIMITS, LANG_TEMPLATES, LABEL, GENERAL_LABEL, COLOR_SHAPE, FUNCTION, LABEL_DIR_MAP, KEYWORD_DIR_MAP
 
 class Environment:
-    def __init__(self, gui=True, time_step=1 / 240):
+    def __init__(self, urdf_path, gui=True, time_step=1 / 240):
         """Creates environment with PyBullet.
 
         Args:
@@ -28,6 +28,8 @@ class Environment:
         self.ik_rest_joints = np.array([0, -0.5, 0.5, -0.5, -0.5, 0]) * np.pi
         self.drop_joints0 = np.array([0.5, -0.8, 0.5, -0.2, -0.5, 0]) * np.pi
         self.drop_joints1 = np.array([1, -0.5, 0.5, -0.5, -0.5, 0]) * np.pi
+
+        self.urdf_path = urdf_path
 
         # Start PyBullet.
         self._client_id = pb.connect(pb.GUI if gui else pb.DIRECT)
@@ -422,7 +424,8 @@ class Environment:
         return color, depth, segm
 
     def __del__(self):
-        pb.disconnect()
+        if self.gui:
+            pb.disconnect()
 
     def get_link_pose(self, body, link):
         result = pb.getLinkState(body, link)
@@ -430,15 +433,15 @@ class Environment:
 
     def add_objects(self, num_obj, workspace_limits):
         """Randomly dropped objects to the workspace"""
-        mesh_list = glob.glob("assets/simplified_objects/*.urdf")
+        mesh_list = glob.glob(self.urdf_path + "*.urdf")
 
         # get target object
         target_mesh_list = []
         for target_obj in self.target_obj_lst:
-            target_mesh_file = "assets/simplified_objects/" + target_obj + ".urdf"
+            target_mesh_file = self.urdf_path + target_obj + ".urdf"
             target_mesh_list.append(target_mesh_file)
         for obj in self.target_obj_dir:
-            obj_mesh_file = "assets/simplified_objects/" + obj + ".urdf"
+            obj_mesh_file = self.urdf_path + obj + ".urdf"
             mesh_list.remove(obj_mesh_file)
 
         obj_mesh_ind = np.random.randint(0, len(mesh_list), size=num_obj-len(self.target_obj_lst))

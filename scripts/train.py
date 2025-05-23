@@ -33,6 +33,8 @@ def parse_args():
     parser.add_argument('--num_episode', action='store', type=int, default=5000)
     parser.add_argument('--max_episode_step', type=int, default=8)
 
+    parser.add_argument('--urdf_path', type=str, default='../assets/simplified_urdf/')
+
     # Transformer paras
     parser.add_argument('--patch_size', type=int, default=32)
     parser.add_argument('--width', type=int, default=512)
@@ -85,7 +87,7 @@ if __name__ == "__main__":
     num_episode = args.num_episode
 
     # load environment
-    env = Environment(gui=False)
+    env = Environment(gui=False, urdf_path=args.urdf_path)
     env.seed(args.seed)
     # env_sim = Environment(gui=False)
     # load logger
