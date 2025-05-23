@@ -181,5 +181,6 @@ logs/
 *.zip
 vhacd_log.txt
 wandb/
+.vscode/
 
 
