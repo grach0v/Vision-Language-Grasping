@@ -182,5 +182,6 @@ logs/
 vhacd_log.txt
 wandb/
 .vscode/
+objects/
 
 

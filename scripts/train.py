@@ -142,6 +142,16 @@ if __name__ == "__main__":
 
             if episode_steps == 0:
                 color_image, depth_image, mask_image = utils.get_true_heightmap(env)
+
+                # → log language goal and scene image at the start of each episode
+                wandb.log({
+                    "language_goal": lang_goal,
+                    "scene_image": wandb.Image(
+                        color_image,
+                        caption=f"Episode {episode} – lang_goal: “{lang_goal}”"
+                    )
+                }, step=episode)
+
                 bbox_images, bbox_positions = utils.get_true_bboxs(env, color_image, depth_image, mask_image)
 
                 # graspnet
