@@ -4,6 +4,8 @@ import random
 import datetime
 import torch
 import wandb
+import os
+import dill
 
 import utils
 from env.constants import WORKSPACE_LIMITS
@@ -62,6 +64,7 @@ def parse_args():
                         help='Value target update per no. of updates per step (default: 1)')
     parser.add_argument('--replay_size', type=int, default=512, metavar='N',
                         help='size of replay buffer (default: 512)')
+    parser.add_argument('--resume_state', type=str, default='', help='path to saved state pickle to resume training')
 
     args = parser.parse_args()
     return args
@@ -70,6 +73,7 @@ def parse_args():
 if __name__ == "__main__":
 
     args = parse_args()
+    print(f"[DEBUG] Starting training with args: {vars(args)}")
     
     # Initialize Weights & Biases logging
     wandb.init(project="vision-language-grasping", config=vars(args))
@@ -106,11 +110,34 @@ if __name__ == "__main__":
     # Memory
     memory = ReplayMemory(args.replay_size, args.seed)
 
-    # training
-    iteration = 0
-    updates = 0
+    # setup debug save directory and interval
+    DEBUG_SAVE_DIR = os.path.join(os.getcwd(), "debug_env")
+    os.makedirs(DEBUG_SAVE_DIR, exist_ok=True)
+    DEBUG_SAVE_INTERVAL = 10
 
-    for episode in range(num_episode):
+    # training initialization
+    # Load resume state if provided
+    if args.resume_state:
+        with open(args.resume_state, 'rb') as f:
+            state = dill.load(f)
+        episode_start = state['episode']
+        iteration = state['iteration']
+        updates = state.get('updates', 0)
+        memory = state['memory']
+        env = state['env']
+        agent = state['agent']
+        env.reconnect()
+        print(f"[DEBUG] Resumed training from {args.resume_state}: episode {episode_start}, iteration {iteration}, updates {updates}")
+    
+    else:
+        episode_start = 0
+        iteration = 0
+        updates = 0
+
+    # training
+    for ep in range(episode_start, num_episode):
+        episode = ep
+        print(f"[DEBUG] Begin episode {episode}")
         episode_reward = 0
         episode_steps = 0
         done = False
@@ -118,17 +145,20 @@ if __name__ == "__main__":
         episilo = min(0.6 * np.power(1.0002, episode), 0.99)
 
         while not reset:
+            print(f"[DEBUG] Reset loop: reset={reset}")
             env.reset()
-            # env_sim.reset()
             lang_goal = env.generate_lang_goal()
+            print(f"[DEBUG] After reset: lang_goal={lang_goal}")
+
             if episode < 500:
                 warmup_num_obj = 8
                 reset = env.add_objects(warmup_num_obj, WORKSPACE_LIMITS)
             else:
                 reset = env.add_objects(num_obj, WORKSPACE_LIMITS)
-            print(f"\033[032m Reset environment of episode {episode}, language goal {lang_goal}\033[0m")
+            print(f"[DEBUG] Added objects, reset={reset}, target_obj_ids={env.target_obj_ids}")
 
         while not done:
+            print(f"[DEBUG] Episode {episode} step {episode_steps} iteration {iteration}")
             # check if one of the target objects is in the workspace:
             out_of_workspace = []
             for obj_id in env.target_obj_ids:
@@ -136,6 +166,7 @@ if __name__ == "__main__":
                 if pos[0] < WORKSPACE_LIMITS[0][0] or pos[0] > WORKSPACE_LIMITS[0][1] \
                     or pos[1] < WORKSPACE_LIMITS[1][0] or pos[1] > WORKSPACE_LIMITS[1][1]:
                     out_of_workspace.append(obj_id)
+            print(f"[DEBUG] out_of_workspace={out_of_workspace}")
             if len(out_of_workspace) == len(env.target_obj_ids):
                 print("\033[031m Target objects are not in the scene!\033[0m")
                 break     
@@ -177,6 +208,7 @@ if __name__ == "__main__":
                     action_idx = np.random.randint(0, len(grasp_pose_set))
 
             action = grasp_pose_set[action_idx]
+            print(f"[DEBUG] Selected action_idx={action_idx}")
 
             if len(memory) >= args.batch_size:
                 # Number of updates per step in environment
@@ -184,6 +216,7 @@ if __name__ == "__main__":
                     # Update parameters of all the networks
                     critic_1_loss, critic_2_loss, policy_loss, ent_loss, alpha, feature_loss = agent.update_parameters(memory, args.batch_size, updates)
                     updates += 1
+                    print(f"[DEBUG] Update {updates}: critic1={critic_1_loss}, policy={policy_loss}")
                     # Log training losses to wandb
                     wandb.log({
                         "critic1_loss": critic_1_loss,
@@ -199,22 +232,40 @@ if __name__ == "__main__":
             wandb.log({"step_reward": reward}, step=iteration)
 
             new_color_image, new_depth_image, new_mask_image = utils.get_true_heightmap(env)
+            print("[DEBUG] Retrieved new scene heightmap after action")
             wandb.log({
                 "scene_after_action": wandb.Image(
                     new_color_image,
                     caption=f"Episode {episode} – Step {episode_steps}"
                 )
             }, step=iteration)
+            print("[DEBUG] Logged scene_after_action to wandb")
+
+            # save debug environment state periodically
+            if iteration % DEBUG_SAVE_INTERVAL == 0:
+                debug_path = os.path.join(DEBUG_SAVE_DIR, f"env_state_iter_{iteration}.pkl")
+                with open(debug_path, 'wb') as f:
+                    dill.dump({
+                         'episode': episode,
+                         'iteration': iteration,
+                         'updates': updates,
+                         'env': env,
+                         'memory': memory,
+                         'agent': agent
+                     }, f)
+                print(f"[DEBUG] Saved python environment to {debug_path}")
 
             if episode < 500:
                 if reward > -1 and reward < 0:
                     reward = -1
+            print(f"[DEBUG] Normalized reward={reward}")
             episode_steps += 1
             iteration += 1
             episode_reward += reward
-            print("\033[034m Episode: {}, total numsteps: {}, reward: {}\033[0m".format(episode, iteration, round(reward, 2), done))
+            print(f"[DEBUG] End of step {episode_steps}, total reward so far={episode_reward}")
 
-            # next state
+            # next state retrieval
+            print("[DEBUG] Fetching next state heightmap and grasps")
             next_color_image, next_depth_image, next_mask_image = utils.get_true_heightmap(env)
             next_bbox_images, next_bbox_positions = utils.get_true_bboxs(env, next_color_image, next_depth_image, next_mask_image)
             next_pcd = utils.get_fuse_pointcloud(env)
@@ -234,6 +285,7 @@ if __name__ == "__main__":
             mask = 1 if episode_steps == args.max_episode_step else float(not done)
 
             memory.push(bboxes.detach().cpu().numpy()[0], pos_bboxes.detach().cpu().numpy()[0], grasps.detach().cpu().numpy()[0], lang_goal, action_idx, reward, next_bboxes.detach().cpu().numpy()[0], next_pos_bboxes.detach().cpu().numpy()[0], next_grasps.detach().cpu().numpy()[0], mask) # Append transition to memory
+            print(f"[DEBUG] Pushed transition to memory. Current memory size={len(memory)}")
             
             # record
             logger.save_heightmaps(iteration, color_image, depth_image)

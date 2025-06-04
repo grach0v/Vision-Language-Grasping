@@ -8,6 +8,23 @@ from scipy.spatial.transform import Rotation as R
 import env.cameras as cameras
 from env.constants import PIXEL_SIZE, WORKSPACE_LIMITS, LANG_TEMPLATES, LABEL, GENERAL_LABEL, COLOR_SHAPE, FUNCTION, LABEL_DIR_MAP, KEYWORD_DIR_MAP
 
+TIME_OUT_SEC = 5.0
+TIME_STEP_HZ = 240
+MAX_STEPS = int(TIME_OUT_SEC * TIME_STEP_HZ)
+
+def freeze_world():
+    """Zero out linear and angular velocities of every body & joint."""
+    for body_id in range(pb.getNumBodies()):
+        # base link
+        pb.resetBaseVelocity(body_id,
+                             linearVelocity=[0, 0, 0],
+                             angularVelocity=[0, 0, 0])
+        # articulated links
+        for j in range(pb.getNumJoints(body_id)):
+            pos, vel, _, _ = pb.getJointState(body_id, j)
+            pb.resetJointState(body_id, j, pos, targetVelocity=0)
+
+
 class Environment:
     def __init__(self, urdf_path, gui=True, time_step=1 / 240):
         """Creates environment with PyBullet.
@@ -155,6 +172,11 @@ class Environment:
             pb.stepSimulation()
         print(f"Warning: Wait static exceeded {timeout} second timeout. Skipping.")
         return False
+
+
+    def reconnect(self):
+        gui = self.gui
+        self._client_id = pb.connect(pb.GUI if gui else pb.DIRECT)
 
     def reset(self):
         self.obj_ids = {"fixed": [], "rigid": []}
@@ -359,9 +381,16 @@ class Environment:
                     max_pos_dist = np.sqrt((WORKSPACE_LIMITS[0][1]-WORKSPACE_LIMITS[0][0]) ** 2 + (WORKSPACE_LIMITS[1][1]-WORKSPACE_LIMITS[1][0]) ** 2)
                     reward = - pos_dist / max_pos_dist
 
+        print("[DEBUG] grasp done, wait for the env to settle...")
+
         # Step simulator asynchronously until objects settle.
+        step_counter = 0
         while not self.is_static:
             pb.stepSimulation()
+            step_counter += 1
+            if step_counter >= MAX_STEPS:
+                freeze_world()           # <── forcibly halt everything
+                break
 
         return reward, done
 

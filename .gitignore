@@ -130,7 +130,6 @@ celerybeat.pid
 # Environments
 .env
 .venv
-env/
 venv/
 ENV/
 env.bak/
@@ -183,5 +182,5 @@ vhacd_log.txt
 wandb/
 .vscode/
 objects/
-
+debug_env
 
