@@ -87,7 +87,7 @@ if __name__ == "__main__":
     num_episode = args.num_episode
 
     # load environment
-    env = Environment(gui=False, urdf_path=args.urdf_path)
+    env = Environment(gui=True, urdf_path=args.urdf_path)
     env.seed(args.seed)
     # env_sim = Environment(gui=False)
     # load logger
@@ -150,7 +150,7 @@ if __name__ == "__main__":
                         color_image,
                         caption=f"Episode {episode} – lang_goal: “{lang_goal}”"
                     )
-                }, step=episode)
+                }, step=iteration)
 
                 bbox_images, bbox_positions = utils.get_true_bboxs(env, color_image, depth_image, mask_image)
 
@@ -192,11 +192,20 @@ if __name__ == "__main__":
                         "entropy_loss": ent_loss,
                         "alpha": alpha,
                         "feature_loss": feature_loss
-                    }, step=updates)
+                    }, step=iteration)
 
             reward, done = env.step(action)
             # Log reward at each step
             wandb.log({"step_reward": reward}, step=iteration)
+
+            new_color_image, new_depth_image, new_mask_image = utils.get_true_heightmap(env)
+            wandb.log({
+                "scene_after_action": wandb.Image(
+                    new_color_image,
+                    caption=f"Episode {episode} – Step {episode_steps}"
+                )
+            }, step=iteration)
+
             if episode < 500:
                 if reward > -1 and reward < 0:
                     reward = -1
@@ -260,5 +269,5 @@ if __name__ == "__main__":
             "episode_reward": episode_reward,
             "episode_steps": episode_steps,
             "episode_success": float(done)
-        }, step=episode)
+        }, step=iteration)
         print("\033[034m Episode: {}, total numsteps: {}, episode steps: {}, episode reward: {}, success: {}\033[0m".format(episode, iteration, episode_steps, round(episode_reward, 2), done))
