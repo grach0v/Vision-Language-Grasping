@@ -12,17 +12,17 @@ TIME_OUT_SEC = 5.0
 TIME_STEP_HZ = 240
 MAX_STEPS = int(TIME_OUT_SEC * TIME_STEP_HZ)
 
-def freeze_world():
-    """Zero out linear and angular velocities of every body & joint."""
-    for body_id in range(pb.getNumBodies()):
-        # base link
-        pb.resetBaseVelocity(body_id,
-                             linearVelocity=[0, 0, 0],
-                             angularVelocity=[0, 0, 0])
-        # articulated links
-        for j in range(pb.getNumJoints(body_id)):
-            pos, vel, _, _ = pb.getJointState(body_id, j)
-            pb.resetJointState(body_id, j, pos, targetVelocity=0)
+# def freeze_world():
+#     """Zero out linear and angular velocities of every body & joint."""
+#     for body_id in range(pb.getNumBodies()):
+#         # base link
+#         pb.resetBaseVelocity(body_id,
+#                              linearVelocity=[0, 0, 0],
+#                              angularVelocity=[0, 0, 0])
+#         # articulated links
+#         for j in range(pb.getNumJoints(body_id)):
+#             pos, vel, _, _ = pb.getJointState(body_id, j)
+#             pb.resetJointState(body_id, j, pos, targetVelocity=0)
 
 
 class Environment:
@@ -170,6 +170,11 @@ class Environment:
             if self.is_static:
                 return True
             pb.stepSimulation()
+
+        # freeze_world()
+        # if self.is_static:
+        #     return True
+
         print(f"Warning: Wait static exceeded {timeout} second timeout. Skipping.")
         return False
 
@@ -384,13 +389,11 @@ class Environment:
         print("[DEBUG] grasp done, wait for the env to settle...")
 
         # Step simulator asynchronously until objects settle.
-        step_counter = 0
         while not self.is_static:
             pb.stepSimulation()
-            step_counter += 1
-            if step_counter >= MAX_STEPS:
-                freeze_world()           # <── forcibly halt everything
-                break
+        
+            # TODO: add timeout
+        
 
         return reward, done
 
