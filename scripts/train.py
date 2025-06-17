@@ -36,6 +36,7 @@ def parse_args():
     parser.add_argument('--max_episode_step', type=int, default=8)
 
     parser.add_argument('--urdf_path', type=str)
+    parser.add_argument('--gui', action='store_true', default=False, help='enable GUI visualization (default: False)')
 
     # Transformer paras
     parser.add_argument('--patch_size', type=int, default=32)
@@ -84,7 +85,7 @@ if __name__ == "__main__":
     num_episode = args.num_episode
 
     # load environment
-    env = Environment(gui=True, urdf_path=args.urdf_path)
+    env = Environment(gui=args.gui, urdf_path=args.urdf_path)
     env.seed(args.seed)
     # env_sim = Environment(gui=False)
     # load logger
@@ -97,6 +98,8 @@ if __name__ == "__main__":
     wandb.watch(agent.vilg_fusion, log="all", log_freq=100)
     wandb.watch(agent.policy, log="all", log_freq=100)
     wandb.watch(agent.critic, log="all", log_freq=100)
+    wandb.watch(agent.critic_target, log="all", log_freq=100)
+
     
     if args.load_model:
         logger.load_checkpoint(agent, args.model_path, args.evaluate)
