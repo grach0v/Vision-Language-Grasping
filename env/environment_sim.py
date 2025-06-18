@@ -399,6 +399,7 @@ class Environment:
 
     def seed(self, seed=None):
         self._random = np.random.RandomState(seed)
+        np.random.seed(seed)
         return seed
 
     def render_camera(self, config):

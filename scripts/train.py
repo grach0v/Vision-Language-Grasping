@@ -37,6 +37,8 @@ def parse_args():
 
     parser.add_argument('--urdf_path', type=str)
     parser.add_argument('--gui', action='store_true', default=False, help='enable GUI visualization (default: False)')
+    parser.add_argument('--log_wandb', action='store_true', default=False, help='enable wandb logging (default: False)')
+    parser.add_argument('--wandb_run_name', type=str, default=None, help='name for the wandb run')
 
     # Transformer paras
     parser.add_argument('--patch_size', type=int, default=32)
@@ -66,6 +68,10 @@ def parse_args():
     parser.add_argument('--replay_size', type=int, default=512, metavar='N',
                         help='size of replay buffer (default: 512)')
 
+    # Overfitting parameters
+    parser.add_argument('--overfit_episodes', type=int, default=0, metavar='N',
+                        help='number of episodes to replay when overfitting (default: 0)')
+
     args = parser.parse_args()
     return args
 
@@ -73,7 +79,17 @@ def parse_args():
 if __name__ == "__main__":
 
     args = parse_args()
-    wandb.init(project="vision-language-grasping", config=vars(args))
+    # initialize wandb if logging enabled, else monkey-patch to no-op
+    if args.log_wandb:
+        init_kwargs = {'project': "vision-language-grasping", 'config': vars(args)}
+        if args.wandb_run_name:
+            init_kwargs['name'] = args.wandb_run_name
+        wandb.init(**init_kwargs)
+    else:
+        wandb.init = lambda *args, **kwargs: None
+        wandb.watch = lambda *args, **kwargs: None
+        wandb.log = lambda *args, **kwargs: None
+
     # set device and seed
     args.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     random.seed(args.seed)
@@ -112,6 +128,12 @@ if __name__ == "__main__":
     updates = 0
 
     for episode in range(num_episode):
+        # if overfitting, replay only the first N unique episodes by reseeding environment
+        if args.overfit_episodes > 0:
+            eff = episode % args.overfit_episodes
+            seed_val = args.seed + eff
+            env.seed(seed_val)
+
         episode_reward = 0
         episode_steps = 0
         done = False
@@ -164,7 +186,7 @@ if __name__ == "__main__":
                     break
                 # preprocess
                 remain_bbox_images, bboxes, pos_bboxes, grasps = utils.preprocess(bbox_images, bbox_positions, grasp_pose_set, (args.patch_size, args.patch_size))
-                if bboxes == None:
+                if bboxes is None:
                     break
 
             if len(grasp_pose_set) == 1:
@@ -221,7 +243,7 @@ if __name__ == "__main__":
 
             # preprocess
             next_remain_bbox_images, next_bboxes, next_pos_bboxes, next_grasps = utils.preprocess(next_bbox_images, next_bbox_positions, next_grasp_pose_set, (args.patch_size, args.patch_size))
-            if next_bboxes == None:
+            if next_bboxes is None:
                 break
 
             # Ignore the "done" signal if it comes from hitting the max step horizon.
