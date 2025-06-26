@@ -172,7 +172,8 @@ if __name__ == "__main__":
                     "scene_image": wandb.Image(
                         color_image,
                         caption=f"Episode {episode} – lang_goal: “{lang_goal}”"
-                    )
+                    ),
+                    "episode": episode,
                 }, step=iteration)
                 bbox_images, bbox_positions = utils.get_true_bboxs(env, color_image, depth_image, mask_image)
 
@@ -212,11 +213,12 @@ if __name__ == "__main__":
                         "policy_loss": policy_loss,
                         "entropy_loss": ent_loss,
                         "alpha": alpha,
-                        "feature_loss": feature_loss
+                        "feature_loss": feature_loss,
+                        "episode": episode,
                     }, step=iteration)
 
             reward, done = env.step(action)
-            wandb.log({"step_reward": reward}, step=iteration)
+            wandb.log({"step_reward": reward, "episode": episode,}, step=iteration)
             if episode < 500:
                 if reward > -1 and reward < 0:
                     reward = -1
@@ -231,7 +233,8 @@ if __name__ == "__main__":
                 "scene_after_action": wandb.Image(
                     next_color_image,
                     caption=f"Episode {episode} – Step {episode_steps}"
-                )
+                ),
+                "episode": episode,
             }, step=iteration)
             next_bbox_images, next_bbox_positions = utils.get_true_bboxs(env, next_color_image, next_depth_image, next_mask_image)
             next_pcd = utils.get_fuse_pointcloud(env)
@@ -284,7 +287,8 @@ if __name__ == "__main__":
         wandb.log({
             "episode_reward": episode_reward,
             "episode_steps": episode_steps,
-            "episode_success": float(done)
+            "episode_success": float(done),
+            "episode": episode,
         }, step=iteration)
         
         print("\033[034m Episode: {}, total numsteps: {}, episode steps: {}, episode reward: {}, success: {}\033[0m".format(episode, iteration, episode_steps, round(episode_reward, 2), done))
