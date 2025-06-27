@@ -377,7 +377,7 @@ class Environment:
             success, grasped_obj_id, pos_dist = self.grasp(pose)
             # Grasping fails
             if not success:
-                reward = -1
+                reward = -0.1
             else:
                 if grasped_obj_id in self.target_obj_ids:
                     reward = 2

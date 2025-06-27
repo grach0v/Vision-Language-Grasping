@@ -16,6 +16,8 @@ import wandb
 import os
 import cv2
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -221,7 +223,7 @@ if __name__ == "__main__":
             wandb.log({"step_reward": reward, "episode": episode,}, step=iteration)
             if episode < 500:
                 if reward > -1 and reward < 0:
-                    reward = -1
+                    reward = -0.1
             episode_steps += 1
             iteration += 1
             episode_reward += reward
