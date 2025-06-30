@@ -102,39 +102,90 @@ class ViLG(object):
         # Sample a batch from memory
         lang_batch, bboxes_batch, pos_bboxes_batch, grasps_batch, action_batch, reward_batch, mask_batch, next_bboxes_batch, next_pos_bboxes_batch, next_grasps_batch = memory.sample(batch_size=batch_size)
 
-        bboxes_batch = torch.FloatTensor(bboxes_batch).to(self.device)
-        grasps_batch = torch.FloatTensor(grasps_batch).to(self.device)
-        pos_bboxes_batch = torch.FloatTensor(pos_bboxes_batch).to(self.device)
-        next_bboxes_batch = torch.FloatTensor(next_bboxes_batch).to(self.device)
-        next_pos_bboxes_batch = torch.FloatTensor(next_pos_bboxes_batch).to(self.device)
-        next_grasps_batch = torch.FloatTensor(next_grasps_batch).to(self.device)
-        action_batch = torch.FloatTensor(action_batch).to(self.device)
-        reward_batch = torch.FloatTensor(reward_batch).to(self.device)
-        mask_batch = torch.FloatTensor(mask_batch).to(self.device)
+        if batch_size == 1:
+            lang_batch = [lang_batch]
+            bboxes_batch = [bboxes_batch]
+            pos_bboxes_batch = [pos_bboxes_batch]
+            grasps_batch = [grasps_batch]
+            action_batch = [action_batch]
+            reward_batch = [reward_batch]
+            mask_batch = [mask_batch]
+            next_bboxes_batch = [next_bboxes_batch]
+            next_pos_bboxes_batch = [next_pos_bboxes_batch]
+            next_grasps_batch = [next_grasps_batch]
+
+        # Padding fails
+        # TODO: fix all the functions to support normal batch size > 1 and padding
+        bboxes_batch = [torch.FloatTensor(bboxes).to(self.device) for bboxes in bboxes_batch]
+        grasps_batch = [torch.FloatTensor(grasps).to(self.device) for grasps in grasps_batch]
+        pos_bboxes_batch = [torch.FloatTensor(pos_bboxes).to(self.device) for pos_bboxes in pos_bboxes_batch]
+        next_bboxes_batch = [torch.FloatTensor(next_bboxes).to(self.device) for next_bboxes in next_bboxes_batch]
+        next_pos_bboxes_batch = [torch.FloatTensor(next_pos_bboxes).to(self.device) for next_pos_bboxes in next_pos_bboxes_batch]
+        next_grasps_batch = [torch.FloatTensor(next_grasps).to(self.device) for next_grasps in next_grasps_batch]
+        action_batch = [torch.FloatTensor(action).to(self.device) for action in action_batch]
+        reward_batch = [torch.FloatTensor(reward).to(self.device) for reward in reward_batch]
+        mask_batch = [torch.FloatTensor(mask).to(self.device) for mask in mask_batch]
 
         with torch.no_grad():
-            next_sa, _, _ = self.get_fusion_feature(next_bboxes_batch, next_pos_bboxes_batch, lang_batch, next_grasps_batch)
+            # next_sa, _, _ = self.get_fusion_feature(next_bboxes_batch, next_pos_bboxes_batch, lang_batch, next_grasps_batch)
+            next_sa_batch = [
+                self.get_fusion_feature(next_bboxes, next_pos_bboxes, lang, next_grasps)[0]
+                for next_bboxes, next_pos_bboxes, lang, next_grasps in zip(next_bboxes_batch, next_pos_bboxes_batch, lang_batch, next_grasps_batch)
+            ]
 
-            logits = self.policy(next_sa)
-            if next_sa.shape[0] == 1:
-                logits = logits.unsqueeze(0)
-            if next_grasps_batch.shape[1] == 1:
-                logits = logits.unsqueeze(0)
+            # logits = self.policy(next_sa)
 
-            logits_prob = F.softmax(logits, -1)
-            z = logits_prob == 0.0
-            z = z.float() * 1e-8
-            next_log_probs = torch.log(logits_prob + z)
+            # if next_sa.shape[0] == 1:
+            #     logits = logits.unsqueeze(0)
+            # if next_grasps_batch.shape[1] == 1:
+            #     logits = logits.unsqueeze(0)
 
-            qf1_next_target, qf2_next_target = self.critic_target(next_sa) # [B, A, 1]
-            qf1_next_target = qf1_next_target.reshape(qf1_next_target.shape[0], -1) # [B, A]
-            qf2_next_target = qf2_next_target.reshape(qf2_next_target.shape[0], -1) # [B, A]
+            logits_batch = [self.policy(next_sa) for next_sa in next_sa_batch]
+            for i, logits in enumerate(logits_batch):
+                if next_sa_batch[i].shape[0] == 1:
+                    logits = logits.unsqueeze(0)
+                if next_grasps_batch[i].shape[1] == 1:
+                    logits = logits.unsqueeze(0)
+                
+                logits_batch[i] = logits
 
-            v1_target = (next_log_probs.exp() * (qf1_next_target - self.alpha * next_log_probs)).sum(-1, keepdim=True)
-            v2_target = (next_log_probs.exp() * (qf2_next_target - self.alpha * next_log_probs)).sum(-1, keepdim=True)
-            min_qf_next_target = torch.min(v1_target, v2_target)
+            # logits_prob = F.softmax(logits, -1)
+            # z = logits_prob == 0.0
+            # z = z.float() * 1e-8
+            # next_log_probs = torch.log(logits_prob + z)
 
-            next_q_value = reward_batch + mask_batch * self.gamma * (min_qf_next_target)
+            logits_prob_batch = [F.softmax(logits, -1) for logits in logits_batch]
+            z_batch = [logits_prob == 0.0 for logits_prob in logits_prob_batch]
+            z_batch = [z.float() * 1e-8 for z in z_batch]
+            next_log_probs_batch = [torch.log(logits_prob + z) for logits_prob, z in zip(logits_prob_batch, z_batch)]
+
+            qf1_next_target_batch = []
+            qf2_next_target_batch = []
+            for next_sa in next_sa_batch: # [B, A, 1]
+                qf1_next_target, qf2_next_target = self.critic_target(next_sa) # [B, A, 1]
+                qf1_next_target = qf1_next_target.reshape(qf1_next_target.shape[0], -1) # [B, A]
+                qf2_next_target = qf2_next_target.reshape(qf2_next_target.shape[0], -1) # [B, A]
+                qf1_next_target_batch.append(qf1_next_target)
+                qf2_next_target_batch.append(qf2_next_target)
+
+            # v1_target = (next_log_probs.exp() * (qf1_next_target - self.alpha * next_log_probs)).sum(-1, keepdim=True)
+            # v2_target = (next_log_probs.exp() * (qf2_next_target - self.alpha * next_log_probs)).sum(-1, keepdim=True)
+            # min_qf_next_target = torch.min(v1_target, v2_target)
+
+            # next_q_value = reward_batch + mask_batch * self.gamma * (min_qf_next_target)
+          
+
+            v1_target_batch = []
+            v2_target_batch = []
+            for next_log_probs, qf1_next_target, qf2_next_target in zip(next_log_probs_batch, qf1_next_target_batch, qf2_next_target_batch):
+                v1_target = (next_log_probs.exp() * (qf1_next_target - self.alpha * next_log_probs)).sum(-1, keepdim=True)
+                v2_target = (next_log_probs.exp() * (qf2_next_target - self.alpha * next_log_probs)).sum(-1, keepdim=True)
+                v1_target_batch.append(v1_target)
+                v2_target_batch.append(v2_target)
+
+            min_qf_next_target_batch = [torch.min(v1_target, v2_target) for v1_target, v2_target in zip(v1_target_batch, v2_target_batch)]
+
+            next_q_value = [reward + mask * self.gamma * min_qf_next_target for reward, mask, min_qf_next_target in zip(reward_batch, mask_batch, min_qf_next_target_batch)]
             
         sa, _, _ = self.get_fusion_feature(bboxes_batch, pos_bboxes_batch, lang_batch, grasps_batch)
         qf1, qf2 = self.critic(sa)  # Two Q-functions to mitigate positive bias in the policy improvement step        
